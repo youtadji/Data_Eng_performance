@@ -35,13 +35,13 @@ public class HashJoinWithBloomFilter implements Operator {
     private String[] currentRightRow;
     private Iterator<String[]> matchIterator;
 
-    // === metrics ===
+    //  metrics
     private int bloomPasses = 0;
     private int bloomRejects = 0;
     private int hashLookups = 0;
     private int actualMatches = 0;
 
-    // === getters for metrics ===
+    // getters for metrics
     public int getBloomPasses()  { return bloomPasses; }
     public int getBloomRejects() { return bloomRejects; }
     public int getHashLookups()  { return hashLookups; }

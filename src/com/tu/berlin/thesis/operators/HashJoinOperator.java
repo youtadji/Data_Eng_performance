@@ -29,7 +29,7 @@ public class HashJoinOperator implements Operator {
     private String[] currentRightRow;
     private Iterator<String[]> matchIterator;
 
-    // === Metrics ===
+    // Metrics
     private int hashLookups = 0;
     private int actualMatches = 0;
 
