@@ -11,7 +11,7 @@ public class IntRefactoredMainExactRangeTree {
 
     public static void main(String[] args) {
         System.out.println("=== EXP10 INT: NoFilter vs Bloom vs ExactRanges (Build+Probe) [CLUSTERS] ===");
-        runExperiment10_Int("3");
+        runExperiment10_Int("2");
     }
 
     // ============================================================
