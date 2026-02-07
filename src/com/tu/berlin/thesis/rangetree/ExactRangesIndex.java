@@ -1,5 +1,7 @@
 package com.tu.berlin.thesis.rangetree;
 
+import java.util.Arrays;
+
 /**
  * Exact membership using only two arrays (starts[], ends[]).
  * Ranges must be sorted and non-overlapping (RangeExtractor guarantees this).
@@ -23,6 +25,9 @@ public final class ExactRangesIndex {
     public boolean contains(int key) {
         if (count == 0) return false;
 
+        //Arrays.binarySearch(start, key)
+        //do this table
+
         // upperBound(starts, count, key) - 1
         int lo = 0;
         int hi = count;
@@ -35,10 +40,11 @@ public final class ExactRangesIndex {
         return i >= 0 && key <= ends[i];
     }
 
+
     public int getRangeCount() { return count; }
 
     public long approxBytesUsed() {
-        // starts + ends arrays (ints), ignoring object headers
+        // starts + ends arrays(ints), gonna ignore object headers
         return (long) count * 2L * 4L;
     }
 }

@@ -21,7 +21,7 @@ public class IntRefactoredMainExactRangeTree {
     //  - exact ranges (2 arrays)
     //
     // Measures BUILD + PROBE time for each join.
-    // Data characteristic: FEW RANGES via CLUSTERS (Option A).
+    // Data characteristic: FEW RANGES via CLUSTERS.
     //
     // IMPORTANT FIX:
     // clusterLen is computed per buildSize & clusters so that we
@@ -49,7 +49,7 @@ public class IntRefactoredMainExactRangeTree {
         int k = 2;
 
         // ============================
-        // CLUSTER knobs (few ranges)
+        // cluster knobs (few ranges)
         // ============================
         int[] clusterCounts = {1, 2, 4, 8, 16};
         int gapLen = 5_000_000; // big gaps between clusters
