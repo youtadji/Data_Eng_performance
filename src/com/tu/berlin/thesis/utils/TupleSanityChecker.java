@@ -75,6 +75,12 @@ public final class TupleSanityChecker {
         // -------------------------
         // 5) OK
         // -------------------------
-
+        System.out.println(
+                "✔ tuples OK [" + tag + "] " +
+                        "build=" + build.size() +
+                        ", probe=" + probe.size() +
+                        ", matches=" + matches +
+                        ", distinctBuildKeys=" + buildKeys.size()
+        );
     }
 }
