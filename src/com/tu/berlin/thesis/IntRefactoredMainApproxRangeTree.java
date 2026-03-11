@@ -36,13 +36,13 @@ public class IntRefactoredMainApproxRangeTree {
         int[] clusterCounts = {16, 32, 64,128,256};
         int[] targetRangeCounts = {4,8,10,12, 16,20,25,32,40,50,54, 64,80,100,110,160,200,240};
 
-        int[] gapLens = {1000,10_000, 100_000};
+        int[] gapLens = {100,1000,10_000, 100_000};
 
         int probeSize = 10_000_000;
         double selectivity = 0.05;
         int k = 2;
 
-        String outName = "experiment_12_int_approxranges_controlled_run10_" + suffix + ".csv";
+        String outName = "experiment_12_int_approxranges_controlled_run1_for_100_" + suffix + ".csv";
 
         try (PrintWriter w = new PrintWriter(outName)) {
 
