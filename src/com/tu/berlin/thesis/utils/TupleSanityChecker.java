@@ -57,11 +57,11 @@ public final class TupleSanityChecker {
             );
         }
 
-        // -------------------------
-        // 4) Non-match overlap check
-        // -------------------------
+// -------------------------
+// 4) Non-match overlap check
+// -------------------------
         long falseMatches = 0;
-        for (int i = expectedMatches; i < probe.size(); i++) {
+        for (int i = (int) expectedMatches; i < probe.size(); i++) {
             int key = probe.get(i)[1];
             if (buildKeys.contains(key)) falseMatches++;
         }

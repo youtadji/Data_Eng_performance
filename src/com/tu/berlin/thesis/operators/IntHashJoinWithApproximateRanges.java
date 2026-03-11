@@ -1,61 +1,63 @@
 package com.tu.berlin.thesis.operators;
 
-import com.tu.berlin.thesis.rangetree.RangeBPlusTree;
+import com.tu.berlin.thesis.rangetree.ExactRangesIndex;
+import com.tu.berlin.thesis.rangetree.RangeApproximator;
 import com.tu.berlin.thesis.rangetree.RangeExtractor;
 
 import java.util.*;
 
-public class IntHashJoinWithRangeTree implements IntOperator {
+public class IntHashJoinWithApproximateRanges implements IntOperator {
 
     private final IntOperator leftOp;
     private final IntOperator rightOp;
     private final int leftKeyIndex;
     private final int rightKeyIndex;
+    private final int targetRangeCount;
 
     private final Map<Integer, List<int[]>> hashTable = new HashMap<>();
-
-    // range tree components
     private final RangeExtractor extractor;
-    private final RangeBPlusTree rangeTree = new RangeBPlusTree();
+    private final ExactRangesIndex ranges = new ExactRangesIndex();
 
-    // probe state
     private int[] currentRightRow;
     private Iterator<int[]> matchIterator;
 
-    // metrics
     private int rangePasses = 0;
     private int rangeRejects = 0;
     private int hashLookups = 0;
     private int actualMatches = 0;
 
-    public int getRangePasses() { return rangePasses; }
-    public int getRangeRejects() { return rangeRejects; }
-    public int getHashLookups() { return hashLookups; }
-    public int getActualMatches() { return actualMatches; }
-    public int getRangeCount() { return rangeTree.getRangeCount(); }
-    public long getRangeBytes() { return rangeTree.approxBytesUsed(); }
+    private int exactRangeCount = 0;
+    private int approximateRangeCount = 0;
 
-    public IntHashJoinWithRangeTree(
+    public IntHashJoinWithApproximateRanges(
             IntOperator left,
             IntOperator right,
             int leftKeyIndex,
             int rightKeyIndex,
-            int expectedBuildKeys
+            int expectedBuildKeys,
+            int targetRangeCount
     ) {
         this.leftOp = left;
         this.rightOp = right;
         this.leftKeyIndex = leftKeyIndex;
         this.rightKeyIndex = rightKeyIndex;
         this.extractor = new RangeExtractor(expectedBuildKeys);
+        this.targetRangeCount = targetRangeCount;
     }
+
+    public int getRangePasses() { return rangePasses; }
+    public int getRangeRejects() { return rangeRejects; }
+    public int getHashLookups() { return hashLookups; }
+    public int getActualMatches() { return actualMatches; }
+    public int getExactRangeCount() { return exactRangeCount; }
+    public int getApproximateRangeCount() { return approximateRangeCount; }
+    public int getRangeCount() { return ranges.getRangeCount(); }
+    public long getRangeBytes() { return ranges.approxBytesUsed(); }
 
     @Override
     public void open() {
-        System.out.println("IntHashJoin WITH RangeTree: OPEN");
+        System.out.println("IntHashJoin WITH ApproximateRanges: OPEN");
 
-        // ------------------------
-        // BUILD PHASE
-        // ------------------------
         leftOp.open();
         int[] leftRow;
         int leftCount = 0;
@@ -63,10 +65,8 @@ public class IntHashJoinWithRangeTree implements IntOperator {
         while ((leftRow = leftOp.next()) != null) {
             int key = leftRow[leftKeyIndex];
 
-            // collect for range extraction
             extractor.add(key);
 
-            // build hash table (manual tmp, no compute if Aabsent)
             List<int[]> tmp = hashTable.get(key);
             if (tmp == null) {
                 tmp = new ArrayList<>();
@@ -78,43 +78,40 @@ public class IntHashJoinWithRangeTree implements IntOperator {
         }
         leftOp.close();
 
-        // build exact ranges + build B+Tree
-        RangeExtractor.Ranges ranges = extractor.buildExactRanges();
-        rangeTree.buildFromRanges(ranges.starts, ranges.ends, ranges.count);
+        RangeExtractor.Ranges exact = extractor.buildExactRanges();
+        exactRangeCount = exact.count;
+
+        RangeExtractor.Ranges approx =
+                RangeApproximator.approximate(exact, targetRangeCount);
+        approximateRangeCount = approx.count;
+
+        ranges.build(approx.starts, approx.ends, approx.count);
 
         System.out.println("  Built hash table with " + leftCount +
                 " rows (" + hashTable.size() + " distinct keys)");
-        System.out.println("  RangeTree ranges=" + rangeTree.getRangeCount() +
-                ", approxBytes=" + rangeTree.approxBytesUsed());
+        System.out.println("  Exact ranges=" + exactRangeCount +
+                ", Approximate ranges=" + approximateRangeCount +
+                ", approxBytes=" + ranges.approxBytesUsed());
 
-        // ------------------------
-        // PROBE PREPARE
-        // ------------------------
         rightOp.open();
         advanceToNextMatch();
     }
 
-    // ============================================================
-    // Probe — find next right row that has matches
-    // ============================================================
     private void advanceToNextMatch() {
         matchIterator = null;
 
         while (matchIterator == null || !matchIterator.hasNext()) {
-
             currentRightRow = rightOp.next();
             if (currentRightRow == null) return;
 
             int key = currentRightRow[rightKeyIndex];
 
-            // range prefilter
-            if (!rangeTree.contains(key)) {
+            if (!ranges.contains(key)) {
                 rangeRejects++;
                 continue;
             }
             rangePasses++;
 
-            // hash lookup
             hashLookups++;
             List<int[]> matches = hashTable.get(key);
 
@@ -125,9 +122,6 @@ public class IntHashJoinWithRangeTree implements IntOperator {
         }
     }
 
-    // ============================================================
-    // next() = return joined row
-    // ============================================================
     @Override
     public int[] next() {
         while (true) {
@@ -140,9 +134,7 @@ public class IntHashJoinWithRangeTree implements IntOperator {
                 System.arraycopy(leftRow, 0, out, 0, leftRow.length);
                 System.arraycopy(currentRightRow, 0, out, leftRow.length, currentRightRow.length);
 
-                if (!matchIterator.hasNext()) {
-                    advanceToNextMatch();
-                }
+                if (!matchIterator.hasNext()) advanceToNextMatch();
                 return out;
             }
 
@@ -150,13 +142,10 @@ public class IntHashJoinWithRangeTree implements IntOperator {
         }
     }
 
-    // ============================================================
-    // close()
-    // ============================================================
     @Override
     public void close() {
         rightOp.close();
         hashTable.clear();
-        System.out.println("IntHashJoin WITH RangeTree: CLOSE");
+        System.out.println("IntHashJoin WITH ApproximateRanges: CLOSE");
     }
 }
