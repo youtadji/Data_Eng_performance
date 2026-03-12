@@ -18,21 +18,21 @@ public class IntRefactoredMainApproxRangeTree {
 
     private static void runExperiment11_Int(String suffix) {
 
-        int[] buildSizes = {1_000_000};
+        int[] buildSizes = {3_000_000};
         int[] bloomSizes = {
                 160_000_000,
                 1_600_000_000
         };
 
-        int[] clusterCounts = {16, 32, 64, 128, 256};
-        int[] targetRangeCounts = {4, 8, 10, 12, 16, 20, 25, 32, 40, 50, 54, 64, 80, 100, 110, 160, 200, 240};
+        int[] clusterCounts = {16, 32, 64, 128, 256,512};
+        int[] targetRangeCounts = {4, 8, 10, 12, 16, 20, 25, 32, 40, 50, 54, 64, 80, 100, 110, 160, 200, 240,300, 400,450, 512};
         int[] gapLens = {100, 1000, 10_000, 100_000};
 
         int probeSize = 10_000_000;
         double selectivity = 0.05;
         int k = 2;
 
-        String outName = "experiment_12_int_approxranges_controlled_run1_for_100_" + suffix + ".csv";
+        String outName = "experiment_14_int_approxranges_controlled_run1_for_100_" + suffix + ".csv";
 
         try (PrintWriter w = new PrintWriter(outName)) {
 
@@ -73,7 +73,7 @@ public class IntRefactoredMainApproxRangeTree {
                         TimedRun noF = runNoFilterBuildAndProbe(dates, sales);
                         RangeRunTimed rt = runExactRangesBuildAndProbe(dates, sales, dates.size());
 
-                        // --- Run bloom once per (dataset, m) --- FIXED: moved outside targetRangeCounts loop
+                        // --- Run bloom once per (dataset, m) --moved outside targetRrange Counts loop
                         Map<Integer, BloomRunTimed> bloomResults = new HashMap<>();
                         for (int m : bloomSizes) {
                             bloomResults.put(m, runBloomBuildAndProbe(dates, sales, m, k));
