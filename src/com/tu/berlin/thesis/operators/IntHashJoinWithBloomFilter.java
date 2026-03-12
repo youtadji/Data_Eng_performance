@@ -171,12 +171,26 @@ public class IntHashJoinWithBloomFilter implements IntOperator {
             }
             return true;
         }
-
+/*
         private int computeHash(int key, int i) {
             int hash = key;
             hash = hash * multipliers[i % multipliers.length];
             return (hash & 0x7fffffff) % size;
         }
+*/
+        //Alternative hash function using MurmurHash3 finalizer mix for better distribution supposedlyyyyy:
+    private int computeHash(int key, int i) {
+        int hash = key ^ (i * 0x9e3779b9);  // seed differently per hash function
+        // MurmurHash3 finalizer mix
+        hash ^= (hash >>> 16);
+        hash *= 0x85ebca6b;
+        hash ^= (hash >>> 13);
+        hash *= 0xc2b2ae35;
+        hash ^= (hash >>> 16);
+        return (hash & 0x7fffffff) % size;
+    }
+
+
          //positive mask , modula en negatuve would be problematic
         double estimateFalsePositiveRate(int numInsertedKeys) {
             double load = (double) numInsertedKeys / size;

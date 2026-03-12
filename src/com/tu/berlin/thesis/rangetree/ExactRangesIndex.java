@@ -22,6 +22,7 @@ public final class ExactRangesIndex {
         this.count = count;
     }
 
+    /*
     public boolean contains(int key) {
         if (count == 0) return false;
 
@@ -39,7 +40,24 @@ public final class ExactRangesIndex {
         int i = lo - 1;
         return i >= 0 && key <= ends[i];
     }
+    */
+    public boolean contains(int key) {
+        if (count == 0) return false;
 
+        int pos = Arrays.binarySearch(starts, 0, count, key);
+
+        int i;
+        if (pos >= 0) {
+            // exact match
+            i = pos;
+        } else {
+            // insertion point -> convert
+            int insertionPoint = -pos - 1;
+            i = insertionPoint - 1;
+        }
+
+        return i >= 0 && key <= ends[i];
+    }
 
     public int getRangeCount() { return count; }
 
