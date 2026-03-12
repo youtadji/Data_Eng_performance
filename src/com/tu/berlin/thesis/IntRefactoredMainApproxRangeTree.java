@@ -28,7 +28,6 @@ public class IntRefactoredMainApproxRangeTree {
         int[] buildSizes = {1_000_000};
         //int[] bloomSizes = {16_000_000, 64_000_000, 256_000_000};
         int[] bloomSizes = {
-                16_000_000,
                 160_000_000,
                 1_600_000_000
         };
@@ -42,7 +41,7 @@ public class IntRefactoredMainApproxRangeTree {
         double selectivity = 0.05;
         int k = 2;
 
-        String outName = "experiment_12_int_approxranges_controlled_run1_for_100_" + suffix + ".csv";
+        String outName = "experiment_13_int_approxranges_controlled_run2_for_100_" + suffix + ".csv";
 
         try (PrintWriter w = new PrintWriter(outName)) {
 
