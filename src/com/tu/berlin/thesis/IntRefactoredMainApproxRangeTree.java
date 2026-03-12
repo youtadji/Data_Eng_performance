@@ -32,7 +32,7 @@ public class IntRefactoredMainApproxRangeTree {
         double selectivity = 0.05;
         int k = 2;
 
-        String outName = "experiment_14_int_approxranges_controlled_run1_for_100_" + suffix + ".csv";
+        String outName = "experiment_16_int_approxranges_controlled_run5_for_100_" + suffix + ".csv";
 
         try (PrintWriter w = new PrintWriter(outName)) {
 
