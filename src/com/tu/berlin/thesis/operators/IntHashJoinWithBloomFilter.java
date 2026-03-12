@@ -178,7 +178,7 @@ public class IntHashJoinWithBloomFilter implements IntOperator {
             return (hash & 0x7fffffff) % size;
         }
 
-     /*
+     /*   Alternative hash function using MurmurHash3 finalizer mix for better distribution supposedlyyyyy:
     private int computeHash(int key, int i) {
         int hash = key ^ (i * 0x9e3779b9);  // seed differently per hash function
         // MurmurHash3 finalizer mix
@@ -189,8 +189,8 @@ public class IntHashJoinWithBloomFilter implements IntOperator {
         hash ^= (hash >>> 16);
         return (hash & 0x7fffffff) % size;
     }
+    */
 
-      */
          //positive mask , modula en negatuve would be problematic
         double estimateFalsePositiveRate(int numInsertedKeys) {
             double load = (double) numInsertedKeys / size;
