@@ -142,7 +142,7 @@ public class IntHashJoinWithBloomFilter implements IntOperator {
     }
 
     // ============================================================
-    // INNER BLOOM FILTER CLASS (INT) — FAST (matches String style)
+    // INNER BLOOM FILTER CLASS (INT) — FAST
     // ============================================================
     private static class Bloom {
         static int[] multipliers = {31, 37, 41, 43, 47, 53, 59, 61, 67, 71};
@@ -171,27 +171,26 @@ public class IntHashJoinWithBloomFilter implements IntOperator {
             }
             return true;
         }
-/*
+
         private int computeHash(int key, int i) {
             int hash = key;
-            hash = hash * multipliers[i % multipliers.length];
-            return (hash & 0x7fffffff) % size;
+            hash = hash * multipliers[i % multipliers.length];  // ijust multiply it ny a cnst
+            return (hash & 0x7fffffff) % size; //modulo size, positive mask to avoid negative indices (01111111111111111111111111111111)LPB
         }
-*/
-        //Alternative hash function using MurmurHash3 finalizer mix for better distribution supposedlyyyyy:
+/*
+        //Alternative hash function using kinda bit mixing function  for better distribution supposedlyyyyy:
     private int computeHash(int key, int i) {
-        int hash = key ^ (i * 0x9e3779b9);  // seed differently per hash function
-        // MurmurHash3 finalizer mix
-        hash ^= (hash >>> 16);
+        int hash = key ^ (i * 0x9e3779b9);  // seed differently per hash function to avoid any collisions, xoe,shift,mult,xor,shift,mult,xor thenn mod
+        hash ^= (hash >>> 16); //a ^ b xor ,shifting it improves the bit mixing i think
         hash *= 0x85ebca6b;
         hash ^= (hash >>> 13);
         hash *= 0xc2b2ae35;
         hash ^= (hash >>> 16);
         return (hash & 0x7fffffff) % size;
-    }
+    } //teh constants from the MurmurHash3
 
+*/
 
-         //positive mask , modula en negatuve would be problematic
         double estimateFalsePositiveRate(int numInsertedKeys) {
             double load = (double) numInsertedKeys / size;
             return Math.pow(1 - Math.exp(-k * load), k);

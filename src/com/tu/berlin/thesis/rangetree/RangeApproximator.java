@@ -75,7 +75,7 @@ public final class RangeApproximator {
 
     // ============================================================
     // TEMP TEST MAIN
-    // Run this class directly
+    //
     // ============================================================
     public static void main(String[] args) {
         RangeExtractor extractor = new RangeExtractor(16);
@@ -92,7 +92,7 @@ public final class RangeApproximator {
 
         RangeExtractor.Ranges approx = approximate(exact, 2);
 
-        System.out.println("=== APPROX RANGES (target=2) ===");
+        System.out.println("=== APPROX RANGES  ===");
         printRanges(approx);
 
         ExactRangesIndex exactIndex = new ExactRangesIndex();
@@ -103,7 +103,7 @@ public final class RangeApproximator {
 
         int[] testKeys = {1, 5, 6, 7, 8, 10, 15, 20, 22, 30};
 
-        System.out.println("=== MEMBERSHIP TEST ===");
+        System.out.println("=== MEMBERTEST ===");
         for (int key : testKeys) {
             boolean inExact = exactIndex.contains(key);
             boolean inApprox = approxIndex.contains(key);
