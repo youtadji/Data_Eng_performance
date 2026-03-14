@@ -189,7 +189,7 @@ public class IntHashJoinWithBloomFilter implements IntOperator {
         return (hash & 0x7fffffff) % size;
     } //teh constants from the MurmurHash3
 
-*/
+*/ //this one big nono
 
         double estimateFalsePositiveRate(int numInsertedKeys) {
             double load = (double) numInsertedKeys / size;
