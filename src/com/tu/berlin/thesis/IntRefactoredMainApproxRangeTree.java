@@ -12,27 +12,28 @@ import java.util.Map;
 public class IntRefactoredMainApproxRangeTree {
 
     public static void main(String[] args) {
-        System.out.println("=== EXP13 INT: NoFilter vs Bloom vs ExactRanges vs ApproxRanges (Build+Probe) [CONTROLLED] ===");
-        runExperiment11_Int("controlled");
+        System.out.println("=== EXP INT: NoFilter vs Bloom vs ExactRanges vs BulkApprox ===");
+        runExperiment_Int("controlled");
     }
 
-    private static void runExperiment11_Int(String suffix) {
+    private static void runExperiment_Int(String suffix) {
 
         int[] buildSizes = {3_000_000};
+
         int[] bloomSizes = {
                 160_000_000,
                 1_600_000_000
         };
 
-        int[] clusterCounts = {16, 32, 64, 128, 256,512};
-        int[] targetRangeCounts = {4, 8, 10, 12, 16, 20, 25, 32, 40, 50, 54, 64, 80, 100, 110, 160, 200, 240,300, 400,450, 512};
+        int[] clusterCounts = {16, 32, 64, 128, 256};
+        int[] targetRangeCounts = {4, 8, 10, 12, 16, 20, 25, 32, 40, 50, 54, 64, 80, 100, 110, 160, 200, 240};
         int[] gapLens = {100, 1000, 10_000, 100_000};
 
         int probeSize = 10_000_000;
         double selectivity = 0.05;
         int k = 2;
 
-        String outName = "experiment_16_int_approxranges_controlled_run5_for_100_" + suffix + ".csv";
+        String outName = "experiment_bulk_approxranges_WITHHUSH_3M_clean_" + suffix + ".csv";
 
         try (PrintWriter w = new PrintWriter(outName)) {
 
@@ -55,30 +56,48 @@ public class IntRefactoredMainApproxRangeTree {
 
                         int clusterLen = buildSize / clusters;
 
-                        String prefix = "exp11_controlled"
+                        String prefix = "exp_bulk"
                                 + "_G" + gapLen
                                 + "_C" + clusters
                                 + "_L" + clusterLen
                                 + "_B" + buildSize;
 
+                        // ============================================================
+                        // Generate dataset once per dataset configuration
+                        // ============================================================
                         generateIntDataWithClustersAndGapNonMatchesIfMissing(
-                                buildSize, probeSize, selectivity,
-                                prefix, clusters, clusterLen, gapLen
+                                buildSize,
+                                probeSize,
+                                selectivity,
+                                prefix,
+                                clusters,
+                                clusterLen,
+                                gapLen
                         );
 
+                        // ============================================================
+                        // Read dataset once
+                        // ============================================================
                         List<int[]> dates = IntCSVReader.readCSV("data/" + prefix + "_dates_int.csv");
                         List<int[]> sales = IntCSVReader.readCSV("data/" + prefix + "_sales_int.csv");
 
-                        // --- Run once per dataset ---
+                        // ============================================================
+                        // Run baselines once per dataset
+                        // ============================================================
                         TimedRun noF = runNoFilterBuildAndProbe(dates, sales);
                         RangeRunTimed rt = runExactRangesBuildAndProbe(dates, sales, dates.size());
 
-                        // --- Run bloom once per (dataset, m) --moved outside targetRrange Counts loop
+                        // ============================================================
+                        // Run Bloom once per dataset per Bloom size
+                        // ============================================================
                         Map<Integer, BloomRunTimed> bloomResults = new HashMap<>();
                         for (int m : bloomSizes) {
                             bloomResults.put(m, runBloomBuildAndProbe(dates, sales, m, k));
                         }
 
+                        // ============================================================
+                        // Run bulk approx per target range count
+                        // ============================================================
                         for (int targetRangeCount : targetRangeCounts) {
 
                             if (targetRangeCount >= clusters) {
@@ -86,14 +105,17 @@ public class IntRefactoredMainApproxRangeTree {
                             }
 
                             ApproxRunTimed ar = runApproxRangesBuildAndProbe(
-                                    dates, sales, dates.size(), targetRangeCount
+                                    dates,
+                                    sales,
+                                    dates.size(),
+                                    targetRangeCount
                             );
 
                             for (int m : bloomSizes) {
-                                BloomRunTimed bl = bloomResults.get(m);  // reuse stored result
+                                BloomRunTimed bl = bloomResults.get(m);
 
-                                double speedBloomProbe  = noF.probeMs / bl.probeMs;
-                                double speedRangeProbe  = noF.probeMs / rt.probeMs;
+                                double speedBloomProbe = noF.probeMs / bl.probeMs;
+                                double speedRangeProbe = noF.probeMs / rt.probeMs;
                                 double speedApproxProbe = noF.probeMs / ar.probeMs;
 
                                 double approxLookupRatio =
@@ -314,6 +336,7 @@ public class IntRefactoredMainApproxRangeTree {
                 }
 
                 int remaining = probeSize - matchCount;
+
                 int gapNonMatchCount = remaining / 2;
                 int farNonMatchCount = remaining - gapNonMatchCount;
 
@@ -322,9 +345,11 @@ public class IntRefactoredMainApproxRangeTree {
                 if (numClusters > 1 && gapLen > 0) {
                     for (int t = 0; t < gapNonMatchCount; t++) {
                         int gapIndex = t % (numClusters - 1);
+
                         int gapStart = base + gapIndex * stride + clusterLen;
                         int gapOffset = t % gapLen;
                         int nonMatchId = gapStart + gapOffset;
+
                         w.println(rowId + "," + nonMatchId + "," + (rowId % 5000) + ",10," + (rowId % 20000));
                         rowId++;
                     }

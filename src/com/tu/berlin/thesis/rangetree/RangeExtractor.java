@@ -50,15 +50,12 @@ public final class RangeExtractor {
             return new Ranges(new int[0], new int[0], 0);
         }
 
-        // first we ll sort all keys
         Arrays.sort(keys, 0, n);
 
-        // worst case: each key isolated => number of ranges = n
         int[] starts = new int[n];
         int[] ends = new int[n];
         int r = 0;
 
-        // then we gonna scan sorted keys and create ranges
         int start = keys[0];
         int prev = keys[0];
 
@@ -66,15 +63,12 @@ public final class RangeExtractor {
             int x = keys[i];
 
             if (x == prev) {
-                // duplicate key: ignore it
-                continue;
+                continue; // duplicate
             }
 
             if (x == prev + 1) {
-                // consecutive: extend current range
                 prev = x;
             } else {
-                // gap: close current range and start a new one
                 starts[r] = start;
                 ends[r] = prev;
                 r++;
@@ -84,17 +78,53 @@ public final class RangeExtractor {
             }
         }
 
-        // close final range
         starts[r] = start;
         ends[r] = prev;
         r++;
 
-        // shrink arrays to actual count ?? bof ?
         if (r < n) {
             starts = Arrays.copyOf(starts, r);
             ends = Arrays.copyOf(ends, r);
         }
 
         return new Ranges(starts, ends, r);
+    }
+
+    /**
+     * Regroup adjacent exact ranges into a requested number of chunk groups.
+     *
+     * Example:
+     * - exact ranges count = 256
+     * - targetClusters = 64
+     * => merge adjacent ranges into 64 groups
+     *
+     * This does NOT change the data.
+     * It only changes how the already-extracted exact ranges are grouped.
+     */
+    public static Ranges regroupToTargetClusters(Ranges exact, int targetClusters) {
+        if (exact.count == 0) {
+            return exact;
+        }
+
+        if (targetClusters <= 0) {
+            throw new IllegalArgumentException("targetClusters must be > 0");
+        }
+
+        if (targetClusters >= exact.count) {
+            return exact;
+        }
+
+        int[] starts = new int[targetClusters];
+        int[] ends = new int[targetClusters];
+
+        for (int g = 0; g < targetClusters; g++) {
+            int from = (g * exact.count) / targetClusters;
+            int toExclusive = ((g + 1) * exact.count) / targetClusters;
+
+            starts[g] = exact.starts[from];
+            ends[g] = exact.ends[toExclusive - 1];
+        }
+
+        return new Ranges(starts, ends, targetClusters);
     }
 }

@@ -11,18 +11,16 @@ public class IntHashJoinWithExactRanges implements IntOperator {
     private final IntOperator rightOp;
     private final int leftKeyIndex;
     private final int rightKeyIndex;
+    private final int clusterCount;
 
     private final Map<Integer, List<int[]>> hashTable = new HashMap<>();
 
-    // exact ranges (2 arrays)
     private final RangeExtractor extractor;
     private final ExactRangesIndex ranges = new ExactRangesIndex();
 
-    // probe state
     private int[] currentRightRow;
     private Iterator<int[]> matchIterator;
 
-    // metrics
     private int rangePasses = 0;
     private int rangeRejects = 0;
     private int hashLookups = 0;
@@ -35,6 +33,24 @@ public class IntHashJoinWithExactRanges implements IntOperator {
     public int getRangeCount() { return ranges.getRangeCount(); }
     public long getRangeBytes() { return ranges.approxBytesUsed(); }
 
+    // New constructor
+    public IntHashJoinWithExactRanges(
+            IntOperator left,
+            IntOperator right,
+            int leftKeyIndex,
+            int rightKeyIndex,
+            int expectedBuildKeys,
+            int clusterCount
+    ) {
+        this.leftOp = left;
+        this.rightOp = right;
+        this.leftKeyIndex = leftKeyIndex;
+        this.rightKeyIndex = rightKeyIndex;
+        this.extractor = new RangeExtractor(expectedBuildKeys);
+        this.clusterCount = clusterCount;
+    }
+
+    // Backward-compatible old constructor
     public IntHashJoinWithExactRanges(
             IntOperator left,
             IntOperator right,
@@ -42,20 +58,13 @@ public class IntHashJoinWithExactRanges implements IntOperator {
             int rightKeyIndex,
             int expectedBuildKeys
     ) {
-        this.leftOp = left;
-        this.rightOp = right;
-        this.leftKeyIndex = leftKeyIndex;
-        this.rightKeyIndex = rightKeyIndex;
-        this.extractor = new RangeExtractor(expectedBuildKeys);
+        this(left, right, leftKeyIndex, rightKeyIndex, expectedBuildKeys, Integer.MAX_VALUE);
     }
 
     @Override
     public void open() {
         System.out.println("IntHashJoin WITH ExactRanges: OPEN");
 
-        // ------------------------
-        // BUILD
-        // ------------------------
         leftOp.open();
         int[] leftRow;
         int leftCount = 0;
@@ -76,18 +85,16 @@ public class IntHashJoinWithExactRanges implements IntOperator {
         }
         leftOp.close();
 
-        // build exact ranges from keys
-        RangeExtractor.Ranges r = extractor.buildExactRanges();
-        ranges.build(r.starts, r.ends, r.count);
+        RangeExtractor.Ranges exact = extractor.buildExactRanges();
+        RangeExtractor.Ranges grouped = RangeExtractor.regroupToTargetClusters(exact, clusterCount);
+        ranges.build(grouped.starts, grouped.ends, grouped.count);
 
         System.out.println("  Built hash table with " + leftCount +
                 " rows (" + hashTable.size() + " distinct keys)");
-        System.out.println("  ExactRanges ranges=" + ranges.getRangeCount() +
+        System.out.println("  Natural exact ranges=" + exact.count +
+                ", grouped ranges=" + grouped.count +
                 ", approxBytes=" + ranges.approxBytesUsed());
 
-        // ------------------------
-        // PROBE
-        // ------------------------
         rightOp.open();
         advanceToNextMatch();
     }
@@ -102,14 +109,12 @@ public class IntHashJoinWithExactRanges implements IntOperator {
 
             int key = currentRightRow[rightKeyIndex];
 
-            // exact ranges prefilter
             if (!ranges.contains(key)) {
                 rangeRejects++;
                 continue;
             }
             rangePasses++;
 
-            // hash lookup
             hashLookups++;
             List<int[]> matches = hashTable.get(key);
 

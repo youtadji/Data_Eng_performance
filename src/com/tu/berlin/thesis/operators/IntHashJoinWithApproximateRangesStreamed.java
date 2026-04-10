@@ -13,6 +13,7 @@ public class IntHashJoinWithApproximateRangesStreamed implements IntOperator {
     private final int buildKeyIndex;
     private final int probeKeyIndex;
     private final int expectedBuildKeys;
+    private final int clusterCount;
     private final int targetRangeCount;
 
     private final Map<Integer, List<int[]>> hashTable;
@@ -26,6 +27,29 @@ public class IntHashJoinWithApproximateRangesStreamed implements IntOperator {
     private int rangePasses;
     private int rangeRejects;
 
+    // New constructor
+    public IntHashJoinWithApproximateRangesStreamed(
+            IntOperator buildInput,
+            IntOperator probeInput,
+            int buildKeyIndex,
+            int probeKeyIndex,
+            int expectedBuildKeys,
+            int clusterCount,
+            int targetRangeCount
+    ) {
+        this.buildInput = buildInput;
+        this.probeInput = probeInput;
+        this.buildKeyIndex = buildKeyIndex;
+        this.probeKeyIndex = probeKeyIndex;
+        this.expectedBuildKeys = expectedBuildKeys;
+        this.clusterCount = clusterCount;
+        this.targetRangeCount = targetRangeCount;
+
+        int initialCapacity = Math.max(16, (int) (expectedBuildKeys / 0.75f) + 1);
+        this.hashTable = new HashMap<>(initialCapacity);
+    }
+
+    // Backward-compatible old constructor
     public IntHashJoinWithApproximateRangesStreamed(
             IntOperator buildInput,
             IntOperator probeInput,
@@ -34,15 +58,7 @@ public class IntHashJoinWithApproximateRangesStreamed implements IntOperator {
             int expectedBuildKeys,
             int targetRangeCount
     ) {
-        this.buildInput = buildInput;
-        this.probeInput = probeInput;
-        this.buildKeyIndex = buildKeyIndex;
-        this.probeKeyIndex = probeKeyIndex;
-        this.expectedBuildKeys = expectedBuildKeys;
-        this.targetRangeCount = targetRangeCount;
-
-        int initialCapacity = Math.max(16, (int) (expectedBuildKeys / 0.75f) + 1);
-        this.hashTable = new HashMap<>(initialCapacity);
+        this(buildInput, probeInput, buildKeyIndex, probeKeyIndex, expectedBuildKeys, Integer.MAX_VALUE, targetRangeCount);
     }
 
     @Override
@@ -71,18 +87,18 @@ public class IntHashJoinWithApproximateRangesStreamed implements IntOperator {
 
             streamedRanges.insert(key);
         }
+
+        streamedRanges.regroupToClusterCount(clusterCount);
     }
 
     @Override
     public int[] next() {
         while (true) {
-            // still returning matches for current probe tuple
             if (currentBuildMatches != null && currentBuildMatchIndex < currentBuildMatches.size()) {
                 int[] buildTuple = currentBuildMatches.get(currentBuildMatchIndex++);
                 return concat(buildTuple, currentProbeTuple);
             }
 
-            // fetch next probe tuple
             currentProbeTuple = probeInput.next();
             if (currentProbeTuple == null) {
                 return null;
@@ -90,7 +106,6 @@ public class IntHashJoinWithApproximateRangesStreamed implements IntOperator {
 
             int probeKey = currentProbeTuple[probeKeyIndex];
 
-            // streamed approximate range prefilter
             if (!streamedRanges.contains(probeKey)) {
                 rangeRejects++;
                 currentBuildMatches = null;
@@ -99,15 +114,12 @@ public class IntHashJoinWithApproximateRangesStreamed implements IntOperator {
             }
 
             rangePasses++;
-
-            // actual hash lookup
             hashLookups++;
             currentBuildMatches = hashTable.get(probeKey);
             currentBuildMatchIndex = 0;
 
             if (currentBuildMatches == null || currentBuildMatches.isEmpty()) {
                 currentBuildMatches = null;
-                continue;
             }
         }
     }

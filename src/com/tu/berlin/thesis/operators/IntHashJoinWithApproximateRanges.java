@@ -12,6 +12,7 @@ public class IntHashJoinWithApproximateRanges implements IntOperator {
     private final IntOperator rightOp;
     private final int leftKeyIndex;
     private final int rightKeyIndex;
+    private final int clusterCount;
     private final int targetRangeCount;
 
     private final Map<Integer, List<int[]>> hashTable = new HashMap<>();
@@ -27,8 +28,29 @@ public class IntHashJoinWithApproximateRanges implements IntOperator {
     private int actualMatches = 0;
 
     private int exactRangeCount = 0;
+    private int groupedRangeCount = 0;
     private int approximateRangeCount = 0;
 
+    // New constructor
+    public IntHashJoinWithApproximateRanges(
+            IntOperator left,
+            IntOperator right,
+            int leftKeyIndex,
+            int rightKeyIndex,
+            int expectedBuildKeys,
+            int clusterCount,
+            int targetRangeCount
+    ) {
+        this.leftOp = left;
+        this.rightOp = right;
+        this.leftKeyIndex = leftKeyIndex;
+        this.rightKeyIndex = rightKeyIndex;
+        this.extractor = new RangeExtractor(expectedBuildKeys);
+        this.clusterCount = clusterCount;
+        this.targetRangeCount = targetRangeCount;
+    }
+
+    // Backward-compatible old constructor
     public IntHashJoinWithApproximateRanges(
             IntOperator left,
             IntOperator right,
@@ -37,12 +59,7 @@ public class IntHashJoinWithApproximateRanges implements IntOperator {
             int expectedBuildKeys,
             int targetRangeCount
     ) {
-        this.leftOp = left;
-        this.rightOp = right;
-        this.leftKeyIndex = leftKeyIndex;
-        this.rightKeyIndex = rightKeyIndex;
-        this.extractor = new RangeExtractor(expectedBuildKeys);
-        this.targetRangeCount = targetRangeCount;
+        this(left, right, leftKeyIndex, rightKeyIndex, expectedBuildKeys, Integer.MAX_VALUE, targetRangeCount);
     }
 
     public int getRangePasses() { return rangePasses; }
@@ -50,6 +67,7 @@ public class IntHashJoinWithApproximateRanges implements IntOperator {
     public int getHashLookups() { return hashLookups; }
     public int getActualMatches() { return actualMatches; }
     public int getExactRangeCount() { return exactRangeCount; }
+    public int getGroupedRangeCount() { return groupedRangeCount; }
     public int getApproximateRangeCount() { return approximateRangeCount; }
     public int getRangeCount() { return ranges.getRangeCount(); }
     public long getRangeBytes() { return ranges.approxBytesUsed(); }
@@ -81,16 +99,19 @@ public class IntHashJoinWithApproximateRanges implements IntOperator {
         RangeExtractor.Ranges exact = extractor.buildExactRanges();
         exactRangeCount = exact.count;
 
-        RangeExtractor.Ranges approx =
-                RangeApproximator.approximate(exact, targetRangeCount);
+        RangeExtractor.Ranges grouped = RangeExtractor.regroupToTargetClusters(exact, clusterCount);
+        groupedRangeCount = grouped.count;
+
+        RangeExtractor.Ranges approx = RangeApproximator.approximate(grouped, targetRangeCount);
         approximateRangeCount = approx.count;
 
         ranges.build(approx.starts, approx.ends, approx.count);
 
         System.out.println("  Built hash table with " + leftCount +
                 " rows (" + hashTable.size() + " distinct keys)");
-        System.out.println("  Exact ranges=" + exactRangeCount +
-                ", Approximate ranges=" + approximateRangeCount +
+        System.out.println("  Natural exact ranges=" + exactRangeCount +
+                ", grouped ranges=" + groupedRangeCount +
+                ", approximate ranges=" + approximateRangeCount +
                 ", approxBytes=" + ranges.approxBytesUsed());
 
         rightOp.open();
