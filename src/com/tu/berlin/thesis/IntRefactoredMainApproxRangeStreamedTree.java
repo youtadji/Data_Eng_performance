@@ -4,8 +4,10 @@ import com.tu.berlin.thesis.data.IntCSVReader;
 import com.tu.berlin.thesis.operators.*;
 
 import java.io.PrintWriter;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 public class IntRefactoredMainApproxRangeStreamedTree {
 
@@ -31,7 +33,7 @@ public class IntRefactoredMainApproxRangeStreamedTree {
         double selectivity = 0.05;
         int k = 2;
 
-        String outName = "experiment_streamed_vs_bulk_approxranges_" + suffix + ".csv";
+        String outName = "experiment_streamed_vs_bulk_approxranges_clean_" + suffix + ".csv";
 
         try (PrintWriter w = new PrintWriter(outName)) {
 
@@ -62,6 +64,9 @@ public class IntRefactoredMainApproxRangeStreamedTree {
                                 + "_L" + clusterLen
                                 + "_B" + buildSize;
 
+                        // ============================================================
+                        // Generate once per dataset configuration
+                        // ============================================================
                         generateIntDataWithClustersAndGapNonMatchesIfMissing(
                                 buildSize,
                                 probeSize,
@@ -72,12 +77,29 @@ public class IntRefactoredMainApproxRangeStreamedTree {
                                 gapLen
                         );
 
+                        // ============================================================
+                        // Read once per dataset configuration
+                        // ============================================================
                         List<int[]> dates = IntCSVReader.readCSV("data/" + prefix + "_dates_int.csv");
                         List<int[]> sales = IntCSVReader.readCSV("data/" + prefix + "_sales_int.csv");
 
+                        // ============================================================
+                        // Run dataset-independent baselines once
+                        // ============================================================
                         TimedRun noF = runNoFilterBuildAndProbe(dates, sales);
                         RangeRunTimed rt = runExactRangesBuildAndProbe(dates, sales, dates.size());
 
+                        // ============================================================
+                        // Run Bloom once per dataset per Bloom size
+                        // ============================================================
+                        Map<Integer, BloomRunTimed> bloomResults = new HashMap<>();
+                        for (int m : bloomSizes) {
+                            bloomResults.put(m, runBloomBuildAndProbe(dates, sales, m, k));
+                        }
+
+                        // ============================================================
+                        // Run bulk + streamed approx per target range count
+                        // ============================================================
                         for (int targetRangeCount : targetRangeCounts) {
 
                             if (targetRangeCount >= clusters) {
@@ -98,8 +120,11 @@ public class IntRefactoredMainApproxRangeStreamedTree {
                                     targetRangeCount
                             );
 
+                            // ========================================================
+                            // For each Bloom size, combine with precomputed Bloom result
+                            // ========================================================
                             for (int m : bloomSizes) {
-                                BloomRunTimed bl = runBloomBuildAndProbe(dates, sales, m, k);
+                                BloomRunTimed bl = bloomResults.get(m);
 
                                 double speedBloomProbe = noF.probeMs / bl.probeMs;
                                 double speedRangeProbe = noF.probeMs / rt.probeMs;
