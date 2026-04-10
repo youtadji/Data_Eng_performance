@@ -24,7 +24,6 @@ public class IntStreamingApproximateRangeSet {
         Range left = leftEntry != null ? leftEntry.getValue() : null;
         Range right = rightEntry != null ? rightEntry.getValue() : null;
 
-        // Case 1: already inside an existing range
         if (left != null && x >= left.start && x <= left.end) {
             return;
         }
@@ -32,33 +31,63 @@ public class IntStreamingApproximateRangeSet {
         boolean touchesLeft = left != null && left.end + 1 == x;
         boolean touchesRight = right != null && x + 1 == right.start;
 
-        // Case 4: bridges left and right   ex [10,12]   [14,20]
-        //insert: 13   -> merge to [10,20]
         if (touchesLeft && touchesRight) {
             rangesByStart.remove(left.start);
             rangesByStart.remove(right.start);
 
             Range merged = new Range(left.start, right.end);
             rangesByStart.put(merged.start, merged);
-        }
-        // Case 2: touches left
-        else if (touchesLeft) {
+        } else if (touchesLeft) {
             left.end = x;
-        }
-        // Case 3: touches right
-        else if (touchesRight) {
+        } else if (touchesRight) {
             rangesByStart.remove(right.start);
 
             Range newRange = new Range(x, right.end);
             rangesByStart.put(newRange.start, newRange);
-        }
-        // Case 5: isolated new key
-        else {
+        } else {
             Range singleton = new Range(x, x);
             rangesByStart.put(singleton.start, singleton);
         }
 
-        // we appproximate immediately if range budget is exceeded
+        while (rangesByStart.size() > targetRangeCount) {
+            mergeBestAdjacentPair();
+        }
+    }
+
+    /**
+     * Regroup the currently materialized ordered ranges into clusterCount
+     * adjacent groups.
+     */
+    public void regroupToClusterCount(int clusterCount) {
+        if (clusterCount <= 0) {
+            throw new IllegalArgumentException("clusterCount must be > 0");
+        }
+
+        if (rangesByStart.isEmpty()) {
+            return;
+        }
+
+        if (clusterCount >= rangesByStart.size()) {
+            return;
+        }
+
+        List<Range> current = new ArrayList<>(rangesByStart.values());
+        TreeMap<Integer, Range> regrouped = new TreeMap<>();
+
+        for (int g = 0; g < clusterCount; g++) {
+            int from = (g * current.size()) / clusterCount;
+            int toExclusive = ((g + 1) * current.size()) / clusterCount;
+
+            Range first = current.get(from);
+            Range last = current.get(toExclusive - 1);
+
+            Range merged = new Range(first.start, last.end);
+            regrouped.put(merged.start, merged);
+        }
+
+        rangesByStart.clear();
+        rangesByStart.putAll(regrouped);
+
         while (rangesByStart.size() > targetRangeCount) {
             mergeBestAdjacentPair();
         }
@@ -111,7 +140,6 @@ public class IntStreamingApproximateRangeSet {
     }
 
     public long getRangeBytes() {
-        // 2 ints per range = start + end = 8 bytes logical payload
         return (long) rangesByStart.size() * 8L;
     }
 
