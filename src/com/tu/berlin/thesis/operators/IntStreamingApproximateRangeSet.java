@@ -1,7 +1,32 @@
 package com.tu.berlin.thesis.operators;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 
+/**
+ * Streaming approximate range set for hash join prefiltering.
+ *
+ * Two-layer design:
+ *   rawRanges     — exact adjacency-merged ranges, never approximated.
+ *                   Ground truth of everything inserted so far.
+ *   rangesByStart — the current approximate view.
+ *
+ * During streaming insert:
+ *   - rawRanges is always exact
+ *   - rangesByStart is kept exact while rawRanges.size() <= targetRangeCount
+ *   - once rawRanges grows beyond targetRangeCount, rangesByStart is rebuilt
+ *     with a globally optimal DP partition into targetRangeCount groups
+ *
+ * Finalization:
+ *   finalizeToTargetRangeCount() recomputes the final approximate view
+ *   directly from rawRanges, so it never re-approximates an approximation.
+ *
+ * Objective:
+ *   Minimize total swallowed gap waste, i.e. false-positive surface.
+ */
 public class IntStreamingApproximateRangeSet {
 
     private final int targetRangeCount;
@@ -10,8 +35,9 @@ public class IntStreamingApproximateRangeSet {
     private final TreeMap<Integer, Range> rangesByStart = new TreeMap<>();
 
     public IntStreamingApproximateRangeSet(int targetRangeCount) {
-        if (targetRangeCount <= 0)
+        if (targetRangeCount <= 0) {
             throw new IllegalArgumentException("targetRangeCount must be > 0");
+        }
         this.targetRangeCount = targetRangeCount;
     }
 
@@ -21,7 +47,9 @@ public class IntStreamingApproximateRangeSet {
 
     public void insert(int x) {
         boolean changed = insertIntoRaw(x);
-        if (!changed) return;
+        if (!changed) {
+            return;
+        }
 
         if (rawRanges.size() > targetRangeCount) {
             reoptimize();
@@ -40,10 +68,11 @@ public class IntStreamingApproximateRangeSet {
         rangesByStart.putAll(computeOptimalPartition(targetRangeCount));
     }
 
-    // Optional: keep only if you still want this for debugging/other experiments
+    // Optional helper for debugging / other experiments
     public void regroupToClusterCount(int clusterCount) {
-        if (clusterCount <= 0)
+        if (clusterCount <= 0) {
             throw new IllegalArgumentException("clusterCount must be > 0");
+        }
         rangesByStart.clear();
         rangesByStart.putAll(computeOptimalPartition(clusterCount));
     }
@@ -54,7 +83,9 @@ public class IntStreamingApproximateRangeSet {
 
     public boolean contains(int x) {
         Map.Entry<Integer, Range> e = rangesByStart.floorEntry(x);
-        if (e == null) return false;
+        if (e == null) {
+            return false;
+        }
         Range r = e.getValue();
         return x >= r.start && x <= r.end;
     }
@@ -63,39 +94,60 @@ public class IntStreamingApproximateRangeSet {
     // Diagnostics
     // -------------------------------------------------------------------------
 
-    public int getRangeCount()    { return rangesByStart.size(); }
-    public int getRawRangeCount() { return rawRanges.size(); }
-    public long getRangeBytes()   { return (long) rangesByStart.size() * 8L; }
+    public int getRangeCount() {
+        return rangesByStart.size();
+    }
 
+    public int getRawRangeCount() {
+        return rawRanges.size();
+    }
+
+    public long getRangeBytes() {
+        return (long) rangesByStart.size() * 8L;
+    }
+
+    /**
+     * Total gap waste of the approximate view.
+     * = number of integers falsely covered by approximate ranges.
+     */
     public long getTotalGapWaste() {
         long waste = 0;
-        for (Range r : rangesByStart.values())
+        for (Range r : rangesByStart.values()) {
             waste += gapWasteOf(r);
+        }
         return waste;
     }
 
+    /**
+     * False positive rate estimate over a domain [domainMin, domainMax].
+     */
     public double estimateFalsePositiveRate(int domainMin, int domainMax) {
-        long domainSize = (long) domainMax - domainMin + 1;
-        if (domainSize <= 0) return 0.0;
+        long domainSize = (long) domainMax - domainMin + 1L;
+        if (domainSize <= 0) {
+            return 0.0;
+        }
         return (double) getTotalGapWaste() / domainSize;
     }
 
     public List<int[]> materializeRanges() {
         List<int[]> out = new ArrayList<>(rangesByStart.size());
-        for (Range r : rangesByStart.values())
-            out.add(new int[]{ r.start, r.end });
+        for (Range r : rangesByStart.values()) {
+            out.add(new int[]{r.start, r.end});
+        }
         return out;
     }
 
     public List<int[]> materializeRawRanges() {
         List<int[]> out = new ArrayList<>(rawRanges.size());
-        for (Range r : rawRanges.values())
-            out.add(new int[]{ r.start, r.end });
+        for (Range r : rawRanges.values()) {
+            out.add(new int[]{r.start, r.end});
+        }
         return out;
     }
 
     // -------------------------------------------------------------------------
     // Raw layer insert
+    // Returns true iff rawRanges actually changed.
     // -------------------------------------------------------------------------
 
     private boolean insertIntoRaw(int x) {
@@ -105,7 +157,10 @@ public class IntStreamingApproximateRangeSet {
         Range left  = leftEntry  != null ? leftEntry.getValue()  : null;
         Range right = rightEntry != null ? rightEntry.getValue() : null;
 
-        if (left != null && x >= left.start && x <= left.end) return false;
+        // Already covered
+        if (left != null && x >= left.start && x <= left.end) {
+            return false;
+        }
 
         boolean touchesLeft  = left  != null && left.end + 1 == x;
         boolean touchesRight = right != null && x + 1 == right.start;
@@ -123,6 +178,7 @@ public class IntStreamingApproximateRangeSet {
         } else {
             rawRanges.put(x, new Range(x, x));
         }
+
         return true;
     }
 
@@ -137,48 +193,68 @@ public class IntStreamingApproximateRangeSet {
 
     private void rebuildFromRaw() {
         rangesByStart.clear();
-        for (Range r : rawRanges.values())
+        for (Range r : rawRanges.values()) {
             rangesByStart.put(r.start, r);
+        }
     }
 
     // -------------------------------------------------------------------------
-    // Interval DP
+    // Interval DP — globally optimal K-partition of rawRanges
+    //
+    // dp[i][k] = min gap waste to cover atoms[0..i-1] in exactly k groups
+    //
+    // Recurrence:
+    //   dp[i][k] = min over j in [k-1, i-1] of:
+    //              dp[j][k-1] + waste(j, i-1)
+    //
+    // waste(from, to) = span of merged range - total integers covered within it
     // -------------------------------------------------------------------------
 
     private TreeMap<Integer, Range> computeOptimalPartition(int K) {
         List<Range> atoms = new ArrayList<>(rawRanges.values());
-        int N = atoms.size();
+        int n = atoms.size();
 
-        if (N == 0) return new TreeMap<>();
-
-        if (N <= K) {
-            TreeMap<Integer, Range> result = new TreeMap<>();
-            for (Range r : atoms) result.put(r.start, r);
+        TreeMap<Integer, Range> result = new TreeMap<>();
+        if (n == 0) {
             return result;
         }
 
-        long[] prefixSize = new long[N + 1];
-        for (int i = 0; i < N; i++)
-            prefixSize[i + 1] = prefixSize[i]
+        if (n <= K) {
+            for (Range r : atoms) {
+                result.put(r.start, r);
+            }
+            return result;
+        }
+
+        long[] prefixCovered = new long[n + 1];
+        for (int i = 0; i < n; i++) {
+            prefixCovered[i + 1] = prefixCovered[i]
                     + (atoms.get(i).end - atoms.get(i).start + 1L);
+        }
 
-        final long INF = Long.MAX_VALUE / 2;
+        final long INF = Long.MAX_VALUE / 4L;
 
-        long[][] dp    = new long[N + 1][K + 1];
-        int[][]  split = new int[N + 1][K + 1];
+        long[][] dp = new long[n + 1][K + 1];
+        int[][] split = new int[n + 1][K + 1];
 
-        for (long[] row : dp) Arrays.fill(row, INF);
-        dp[0][0] = 0;
+        for (long[] row : dp) {
+            Arrays.fill(row, INF);
+        }
+        dp[0][0] = 0L;
 
-        for (int i = 1; i <= N; i++) {
-            dp[i][1] = waste(atoms, prefixSize, 0, i - 1);
+        for (int i = 1; i <= n; i++) {
+            dp[i][1] = waste(atoms, prefixCovered, 0, i - 1);
             split[i][1] = 0;
 
             for (int k = 2; k <= Math.min(i, K); k++) {
                 for (int j = k - 1; j < i; j++) {
-                    if (dp[j][k - 1] == INF) continue;
+                    if (dp[j][k - 1] == INF) {
+                        continue;
+                    }
+
                     long candidate = dp[j][k - 1]
-                            + waste(atoms, prefixSize, j, i - 1);
+                            + waste(atoms, prefixCovered, j, i - 1);
+
                     if (candidate < dp[i][k]) {
                         dp[i][k] = candidate;
                         split[i][k] = j;
@@ -187,33 +263,39 @@ public class IntStreamingApproximateRangeSet {
             }
         }
 
-        TreeMap<Integer, Range> result = new TreeMap<>();
-        int i = N, k = K;
+        int i = n;
+        int k = K;
         while (k > 0 && i > 0) {
             int j = split[i][k];
-            result.put(
-                    atoms.get(j).start,
-                    new Range(atoms.get(j).start, atoms.get(i - 1).end)
-            );
+            Range merged = new Range(atoms.get(j).start, atoms.get(i - 1).end);
+            result.put(merged.start, merged);
             i = j;
             k--;
         }
+
         return result;
     }
 
-    private long waste(List<Range> atoms, long[] prefixSize, int from, int to) {
-        long span    = atoms.get(to).end - atoms.get(from).start + 1L;
-        long covered = prefixSize[to + 1] - prefixSize[from];
+    private long waste(List<Range> atoms, long[] prefixCovered, int from, int to) {
+        long span = atoms.get(to).end - atoms.get(from).start + 1L;
+        long covered = prefixCovered[to + 1] - prefixCovered[from];
         return span - covered;
     }
 
     private long gapWasteOf(Range r) {
-        long span    = r.end - r.start + 1L;
-        long covered = 0;
-        for (Range raw : rawRanges.subMap(r.start, true, r.end, true).values())
+        long span = r.end - r.start + 1L;
+        long covered = 0L;
+
+        for (Range raw : rawRanges.subMap(r.start, true, r.end, true).values()) {
             covered += raw.end - raw.start + 1L;
+        }
+
         return span - covered;
     }
+
+    // -------------------------------------------------------------------------
+    // Immutable range
+    // -------------------------------------------------------------------------
 
     private static final class Range {
         final int start;
@@ -221,7 +303,7 @@ public class IntStreamingApproximateRangeSet {
 
         Range(int start, int end) {
             this.start = start;
-            this.end   = end;
+            this.end = end;
         }
     }
 }
