@@ -318,6 +318,7 @@ public class IntRefactoredMainUnifiedApproxExperiment {
         return new java.io.File(path).exists();
     }
 
+    /*
     private static void generateFixedDataIfMissing(
             int buildSize,
             int probeSize,
@@ -386,7 +387,106 @@ public class IntRefactoredMainUnifiedApproxExperiment {
             e.printStackTrace();
         }
     }
+*/
+    private static void generateFixedDataIfMissing(
+            int buildSize,
+            int probeSize,
+            double selectivity,
+            String prefix
+    ) {
+        String datesPath = "data/" + prefix + "_dates_int.csv";
+        String salesPath = "data/" + prefix + "_sales_int.csv";
 
+        if (fileExists(datesPath) && fileExists(salesPath)) {
+            System.out.println("Fixed data exists -> " + prefix);
+            return;
+        }
+
+        System.out.println("Generating fixed BLOCK+GAP data -> " + prefix);
+
+        try {
+            int base = 1_000_000_000;
+
+            // Fixed physical shape of the data
+            int blockLen = 100;   // consecutive valid IDs per block
+            int gapLen = 20;      // empty IDs between blocks
+            int stride = blockLen + gapLen;
+
+            int[] validIds = new int[buildSize];
+            int validCount = 0;
+
+            java.util.ArrayList<Integer> nearMissIds = new java.util.ArrayList<>();
+
+            try (PrintWriter w = new PrintWriter(datesPath)) {
+                w.println("id,year,desc_code");
+
+                int blockIndex = 0;
+
+                while (validCount < buildSize) {
+                    int blockStart = base + blockIndex * stride;
+
+                    // write valid IDs for this block
+                    for (int off = 0; off < blockLen && validCount < buildSize; off++) {
+                        int id = blockStart + off;
+                        validIds[validCount++] = id;
+
+                        int year = 1980 + (id % 40);
+                        int descCode = id % 1000;
+
+                        w.println(id + "," + year + "," + descCode);
+                    }
+
+                    // collect gap IDs as candidate near misses
+                    int gapStart = blockStart + blockLen;
+                    for (int g = 0; g < gapLen; g++) {
+                        nearMissIds.add(gapStart + g);
+                    }
+
+                    blockIndex++;
+                }
+            }
+
+            try (PrintWriter w = new PrintWriter(salesPath)) {
+                w.println("sale_id,date_id,product_code,price,customer_code");
+
+                int matchCount = (int) (probeSize * selectivity);
+
+                // MATCHES
+                for (int i = 1; i <= matchCount; i++) {
+                    int id = validIds[(i - 1) % validCount];
+                    w.println(i + "," + id + "," + (i % 5000) + ",10," + (i % 20000));
+                }
+
+                int remaining = probeSize - matchCount;
+                int nearMissCount = remaining / 2;
+                int farMissCount = remaining - nearMissCount;
+
+                int rowId = matchCount + 1;
+
+                // NEAR MISSES: fixed IDs from real gaps between blocks
+                for (int t = 0; t < nearMissCount; t++) {
+                    int nearMissId = nearMissIds.get(t % nearMissIds.size());
+                    w.println(rowId + "," + nearMissId + "," + (rowId % 5000) + ",10," + (rowId % 20000));
+                    rowId++;
+                }
+
+                // FAR MISSES
+                int nonMatchBase = 2_000_000_000;
+                for (int t = 0; t < farMissCount; t++) {
+                    int nonMatchId = nonMatchBase + t + 1;
+                    w.println(rowId + "," + nonMatchId + "," + (rowId % 5000) + ",10," + (rowId % 20000));
+                    rowId++;
+                }
+            }
+
+            System.out.println("  Fixed build rows generated: " + validCount);
+            System.out.println("  Fixed near-miss pool size: " + nearMissIds.size());
+            System.out.println("  blockLen=" + blockLen + ", gapLen=" + gapLen);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
     // ============================================================
     // HELPERS
     // ============================================================
