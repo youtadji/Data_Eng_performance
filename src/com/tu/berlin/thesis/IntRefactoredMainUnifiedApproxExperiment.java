@@ -32,7 +32,7 @@ public class IntRefactoredMainUnifiedApproxExperiment {
         double selectivity = 0.05;
         int k = 2;
 
-        String outName = "experiment_streamed_vs_bulk_approxranges_fixeddata_" + suffix + ".csv";
+        String outName = "experiment_streamed_vs_bulk_approxranges_fixeddata_new" + suffix + ".csv";
 
         try (PrintWriter w = new PrintWriter(outName)) {
 
