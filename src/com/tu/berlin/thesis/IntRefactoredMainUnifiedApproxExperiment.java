@@ -18,21 +18,22 @@ public class IntRefactoredMainUnifiedApproxExperiment {
 
     private static void runExperiment_Int(String suffix) {
 
-        int[] buildSizes = {1_000_000};
+        //int[] buildSizes = {1_000_000};
+        int[] buildSizes = {3_000_000};
 
         int[] bloomSizes = {
                 160_000_000,
                 1_600_000_000
         };
 
-        int[] clusterCounts = {16, 32, 64, 128, 256};
-        int[] targetRangeCounts = {4, 8, 10, 12, 16, 20, 25, 32, 40, 50, 54, 64, 80, 100, 110, 160, 200, 240};
+        int[] clusterCounts = {16, 32, 64, 128, 256,512};
+        int[] targetRangeCounts = {4, 8, 10, 12, 16, 20, 25, 32, 40, 50, 54, 64, 80, 100, 110, 160, 200, 240, 256,300,350,400,450,512};
 
         int probeSize = 10_000_000;
         double selectivity = 0.05;
         int k = 2;
 
-        String outName = "experiment_streamed_vs_bulk_approxranges_fixeddata_new" + suffix + ".csv";
+        String outName = "experiment_streamed_vs_bulk_approxranges_fixeddata3M_largegap_ob_new" + suffix + ".csv";
 
         try (PrintWriter w = new PrintWriter(outName)) {
 
@@ -53,7 +54,7 @@ public class IntRefactoredMainUnifiedApproxExperiment {
 
             for (int buildSize : buildSizes) {
 
-                String prefix = "fixeddata_B" + buildSize
+                String prefix = "fixeddata_largegap_ob_B" + buildSize
                         + "_P" + probeSize
                         + "_S" + (int) (selectivity * 100);
 
@@ -409,7 +410,7 @@ public class IntRefactoredMainUnifiedApproxExperiment {
 
             // Fixed physical shape of the data
             int blockLen = 100;   // consecutive valid IDs per block
-            int gapLen = 20;      // empty IDs between blocks
+            int gapLen = 100;      // empty IDs between blocks gapsyouyou
             int stride = blockLen + gapLen;
 
             int[] validIds = new int[buildSize];
